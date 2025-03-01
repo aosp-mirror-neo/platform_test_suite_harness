@@ -18,7 +18,6 @@ package com.android.compatibility.common.tradefed.targetprep;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.endsWith;
 import static org.mockito.Mockito.mock;
@@ -27,7 +26,7 @@ import static org.mockito.Mockito.when;
 import com.android.compatibility.common.tradefed.build.CompatibilityBuildHelper;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -53,13 +52,8 @@ import java.util.Set;
 /** Unit tests for {@link IncrementalDeqpPreparer}. */
 @RunWith(JUnit4.class)
 public class IncrementalDeqpPreparerTest {
-    private static final String DEVICE_FINGERPRINT =
-            "generic/aosp_cf_x86_64_phone/vsoc_x86_64:S/AOSP"
-                    + ".MASTER/7363321:userdebug/test-keys";
-
     private IncrementalDeqpPreparer mPreparer;
     private ITestDevice mMockDevice;
-    private OptionSetter mPreparerSetter = null;
 
     @Before
     public void setUp() throws Exception {
@@ -71,14 +65,11 @@ public class IncrementalDeqpPreparerTest {
     @Test
     public void testRunIncrementalDeqp() throws Exception {
         File resultDir = FileUtil.createTempDir("result");
-        InputStream zipStream =
-                getClass().getResourceAsStream("/testdata/current_build_target-files.zip");
-        File zipFile = FileUtil.createTempFile("targetFile", ".zip");
+        InputStream deqpDependencyStream =
+                getClass().getResourceAsStream("/testdata/deqp_dependency_file.so");
+        File deqpDependencyFile = FileUtil.createTempFile("deqp_dependency_file", ".so");
         try {
-            FileUtil.writeToFile(zipStream, zipFile);
-            mPreparerSetter = new OptionSetter(mPreparer);
-            mPreparerSetter.setOptionValue(
-                    "incremental-deqp-preparer:current-build", zipFile.getAbsolutePath());
+            FileUtil.writeToFile(deqpDependencyStream, deqpDependencyFile);
             IBuildInfo mMockBuildInfo = new BuildInfo();
             IInvocationContext mMockContext = new InvocationContext();
             mMockContext.addDeviceBuildInfo("build", mMockBuildInfo);
@@ -97,7 +88,7 @@ public class IncrementalDeqpPreparerTest {
             FileUtil.writeToFile(perfDumpStream, dumpFile);
             when(mMockDevice.pullFile(endsWith("-perf-dump.txt")))
                     .thenReturn(dumpFile, null, null, null);
-            when(mMockDevice.getProperty("ro.build.fingerprint")).thenReturn(DEVICE_FINGERPRINT);
+            when(mMockDevice.pullFile(endsWith(".so"))).thenReturn(deqpDependencyFile);
 
             File incrementalDeqpReport =
                     new File(deviceInfoDir, IncrementalDeqpPreparer.INCREMENTAL_DEQP_REPORT_NAME);
@@ -114,7 +105,7 @@ public class IncrementalDeqpPreparerTest {
             assertTrue(incrementalDeqpReport.exists());
         } finally {
             FileUtil.recursiveDelete(resultDir);
-            FileUtil.deleteFile(zipFile);
+            FileUtil.deleteFile(deqpDependencyFile);
         }
     }
 
@@ -175,74 +166,32 @@ public class IncrementalDeqpPreparerTest {
     }
 
     @Test
-    public void testGetTargetFileHash() throws IOException, TargetSetupError {
+    public void testGetFileHash()
+            throws IOException, DeviceNotAvailableException, TargetSetupError {
         Set<String> fileSet =
                 new HashSet<>(
                         Arrays.asList(
                                 "/system/deqp_dependency_file_a.so",
                                 "/vendor/deqp_dependency_file_b.so",
-                                "/vendor/file_not_exists.so"));
-        // current_build_target-files.zip is a stripped down version of the target-files.zip
-        // generated from the android build system, with a few added mocked target files for
-        // testing.
-        InputStream zipStream =
-                getClass().getResourceAsStream("/testdata/current_build_target-files.zip");
-        File zipFile = FileUtil.createTempFile("targetFile", ".zip");
+                                "/vendor/deqp_dependency_file_c.so"));
+        InputStream deqpDependencyStream =
+                getClass().getResourceAsStream("/testdata/deqp_dependency_file.so");
+        File deqpDependencyFile = FileUtil.createTempFile("deqp_dependency_file", ".so");
         try {
-            FileUtil.writeToFile(zipStream, zipFile);
-            Map<String, String> fileHashMap = mPreparer.getTargetFileHash(fileSet, zipFile);
+            FileUtil.writeToFile(deqpDependencyStream, deqpDependencyFile);
+            when(mMockDevice.pullFile(endsWith(".so"))).thenReturn(deqpDependencyFile);
+            Map<String, String> fileHashMap = mPreparer.getFileHash(fileSet, mMockDevice);
 
-            assertEquals(fileHashMap.size(), 2);
-            assertEquals(
-                    fileHashMap.get("/system/deqp_dependency_file_a.so"),
+            assertEquals(fileHashMap.size(), 3);
+            String md5 =
                     StreamUtil.calculateMd5(
                             new ByteArrayInputStream(
-                                    "placeholder\nplaceholder\n"
-                                            .getBytes(StandardCharsets.UTF_8))));
-            assertEquals(
-                    fileHashMap.get("/vendor/deqp_dependency_file_b.so"),
-                    StreamUtil.calculateMd5(
-                            new ByteArrayInputStream(
-                                    ("placeholder\nplaceholder" + "\nplaceholder\n\n")
-                                            .getBytes(StandardCharsets.UTF_8))));
+                                    "placeholder\nplaceholder\n".getBytes(StandardCharsets.UTF_8)));
+            assertEquals(fileHashMap.get("/system/deqp_dependency_file_a.so"), md5);
+            assertEquals(fileHashMap.get("/vendor/deqp_dependency_file_b.so"), md5);
+            assertEquals(fileHashMap.get("/vendor/deqp_dependency_file_c.so"), md5);
         } finally {
-            FileUtil.deleteFile(zipFile);
-        }
-    }
-
-    @Test
-    public void testValidateBuildFingerprint() throws Exception {
-        // current_build_target-files.zip is a stripped down version of the target-files.zip
-        // generated from the android build system, with a few added mocked target files for
-        // testing.
-        InputStream zipStream =
-                getClass().getResourceAsStream("/testdata/current_build_target-files.zip");
-        File zipFile = FileUtil.createTempFile("targetFile", ".zip");
-        try {
-            FileUtil.writeToFile(zipStream, zipFile);
-            when(mMockDevice.getProperty("ro.build.fingerprint")).thenReturn(DEVICE_FINGERPRINT);
-
-            mPreparer.validateBuildFingerprint(zipFile, mMockDevice);
-        } finally {
-            FileUtil.deleteFile(zipFile);
-        }
-    }
-
-    @Test
-    public void testValidateBuildFingerprint_fingerprintMismatch() throws Exception {
-        InputStream zipStream =
-                getClass().getResourceAsStream("/testdata/current_build_target-files.zip");
-        File zipFile = FileUtil.createTempFile("targetFile", ".zip");
-        try {
-            FileUtil.writeToFile(zipStream, zipFile);
-            when(mMockDevice.getProperty("ro.build.fingerprint"))
-                    .thenReturn(DEVICE_FINGERPRINT + "modified");
-
-            assertThrows(
-                    TargetSetupError.class,
-                    () -> mPreparer.validateBuildFingerprint(zipFile, mMockDevice));
-        } finally {
-            FileUtil.deleteFile(zipFile);
+            FileUtil.deleteFile(deqpDependencyFile);
         }
     }
 }

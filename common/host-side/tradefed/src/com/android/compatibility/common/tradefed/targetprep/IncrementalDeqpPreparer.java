@@ -39,28 +39,17 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 /** Collects the dEQP dependencies and compares the builds. */
 @OptionClass(alias = "incremental-deqp-preparer")
 public class IncrementalDeqpPreparer extends BaseTargetPreparer {
-    @Option(
-            name = "current-build",
-            description =
-                    "Absolute file path to a target file of the current build. Required for"
-                            + " incremental dEQP.")
-    private File mCurrentBuild = null;
-
     @Option(name = "run-mode", description = "The run mode for incremental dEQP.")
     private RunMode mRunMode = RunMode.LIGHTWEIGHT_RUN;
 
@@ -104,7 +93,6 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
     private static final String RUN_MODE_ATTRIBUTE = "run_mode";
     private static final String MODULE_ATTRIBUTE = "module";
     private static final String MODULE_NAME_ATTRIBUTE = "module_name";
-    private static final String FINGERPRINT = "ro.build.fingerprint";
     private static final String DEPENDENCY_DETAILS_ATTRIBUTE = "deps_details";
     private static final String DEPENDENCY_NAME_ATTRIBUTE = "dep_name";
     private static final String DEPENDENCY_FILE_HASH_ATTRIBUTE = "file_hash";
@@ -163,7 +151,6 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
                         device.getDeviceDescriptor(),
                         TestErrorIdentifier.TEST_ABORTED);
             }
-            validateBuildFingerprint(mCurrentBuild, device);
 
             List<String> deqpTestList =
                     RunMode.FULL_RUN.equals(mRunMode)
@@ -179,8 +166,7 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
                 store.startGroup(); // Module
                 store.addResult(MODULE_NAME_ATTRIBUTE, MODULE_NAME);
                 store.startArray(DEPENDENCY_DETAILS_ATTRIBUTE);
-                Map<String, String> currentBuildHashMap =
-                        getTargetFileHash(dependencies, mCurrentBuild);
+                Map<String, String> currentBuildHashMap = getFileHash(dependencies, device);
                 for (String dependency : dependencies) {
                     store.startGroup();
                     store.addResult(DEPENDENCY_NAME_ATTRIBUTE, dependency);
@@ -252,38 +238,21 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
         return result;
     }
 
-    /** Gets the hash value of the specified file's content from the target file. */
-    protected Map<String, String> getTargetFileHash(Set<String> fileNames, File targetFile)
-            throws IOException, TargetSetupError {
-        ZipFile zipFile = new ZipFile(targetFile);
-
-        Map<String, String> hashMap = new HashMap<>();
+    /** Gets the hash value of the specified file's content from the device. */
+    protected Map<String, String> getFileHash(Set<String> fileNames, ITestDevice device)
+            throws DeviceNotAvailableException, TargetSetupError {
+        Map<String, String> fileHashes = new HashMap<>();
         for (String file : fileNames) {
-            // Convert top directory's name to upper case.
-            String[] arr = file.split("/", 3);
-            if (arr.length < 3) {
+            File localFile = device.pullFile(file);
+            if (localFile == null) {
                 throw new TargetSetupError(
-                        String.format(
-                                "Fail to generate zip file entry for dependency: %s. A"
-                                        + " valid dependency should be a file path located at a sub"
-                                        + " directory.",
-                                file),
+                        String.format("Fail to load file: %s from the device.", file),
                         TestErrorIdentifier.TEST_ABORTED);
             }
-            String formattedName = arr[1].toUpperCase() + "/" + arr[2];
-
-            ZipEntry entry = zipFile.getEntry(formattedName);
-            if (entry == null) {
-                CLog.i(
-                        "Fail to find the file: %s in target files: %s",
-                        formattedName, targetFile.getName());
-                continue;
-            }
-            InputStream is = zipFile.getInputStream(entry);
-            String md5 = StreamUtil.calculateMd5(is);
-            hashMap.put(file, md5);
+            String md5 = FileUtil.calculateMd5(localFile);
+            fileHashes.put(file, md5);
         }
-        return hashMap;
+        return fileHashes;
     }
 
     /** Parses the dump file and gets list of dependencies. */
@@ -331,36 +300,6 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
             StreamUtil.close(br);
         }
         return result;
-    }
-
-    /** Validates if the build fingerprint matches on both the target file and the device. */
-    protected void validateBuildFingerprint(File targetFile, ITestDevice device)
-            throws TargetSetupError {
-        String deviceFingerprint;
-        String targetFileFingerprint;
-        try {
-            deviceFingerprint = device.getProperty(FINGERPRINT);
-            ZipFile zipFile = new ZipFile(targetFile);
-            ZipEntry entry = zipFile.getEntry("SYSTEM/build.prop");
-            InputStream is = zipFile.getInputStream(entry);
-            Properties prop = new Properties();
-            prop.load(is);
-            targetFileFingerprint = prop.getProperty(FINGERPRINT);
-        } catch (IOException | DeviceNotAvailableException e) {
-            throw new TargetSetupError(
-                    String.format("Fail to get fingerprint from: %s", targetFile.getName()),
-                    e,
-                    device.getDeviceDescriptor(),
-                    TestErrorIdentifier.TEST_ABORTED);
-        }
-        if (deviceFingerprint == null || !deviceFingerprint.equals(targetFileFingerprint)) {
-            throw new TargetSetupError(
-                    String.format(
-                            "Fingerprint on the target file %s doesn't match the one %s on the"
-                                    + " device",
-                            targetFileFingerprint, deviceFingerprint),
-                    TestErrorIdentifier.TEST_ABORTED);
-        }
     }
 
     /** Adds a build attribute to all the {@link IBuildInfo} tracked for the invocation. */
