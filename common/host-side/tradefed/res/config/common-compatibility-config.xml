@@ -24,12 +24,12 @@
         <option name="log-level-display" value="WARN" />
     </logger>
     <result_reporter class="com.android.compatibility.common.tradefed.result.ConsoleReporter" />
+    <result_reporter class="com.android.compatibility.common.tradefed.result.suite.CertificationSuiteResultReporter" />
     <result_reporter class="com.android.compatibility.common.tradefed.result.suite.CompatibilityProtoResultReporter">
         <option name="periodic-proto-writing" value="true" />
     </result_reporter>
     <!-- Compact the protos to save space -->
     <result_reporter class="com.android.compatibility.common.tradefed.result.suite.CompactProtoReporter" />
-    <result_reporter class="com.android.compatibility.common.tradefed.result.suite.CertificationSuiteResultReporter" />
     <!-- Create the zip report last always -->
     <result_reporter class="com.android.compatibility.common.tradefed.result.suite.CertificationReportCreator" />
 </configuration>
