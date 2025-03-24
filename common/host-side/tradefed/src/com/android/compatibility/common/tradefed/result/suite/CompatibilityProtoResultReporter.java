@@ -52,7 +52,7 @@ public class CompatibilityProtoResultReporter extends FileProtoResultReporter
             mBuildHelper = new CompatibilityBuildHelper(invocationContext.getBuildInfos().get(0));
             mResultDir = getProtoResultDirectory(mBuildHelper);
             mBaseProtoFile = new File(mResultDir, PROTO_FILE_NAME);
-            setFileOutput(mBaseProtoFile);
+            setOutputFile(mBaseProtoFile);
         }
         super.processStartInvocation(invocationStartRecord, invocationContext);
     }

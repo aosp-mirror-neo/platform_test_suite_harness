@@ -95,7 +95,7 @@ public class CompactProtoReporter
 
     private void compactAllProtos() {
         FileProtoResultReporter fprr = new FileProtoResultReporter();
-        fprr.setFileOutput(mBaseProtoFile);
+        fprr.setOutputFile(mBaseProtoFile);
         ProtoResultParser parser = new ProtoResultParser(fprr, new InvocationContext(), true);
         int index = 0;
         while (new File(mBaseProtoFile.getAbsolutePath() + index).exists()) {
