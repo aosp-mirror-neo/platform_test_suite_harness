@@ -157,6 +157,11 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
                             ? BASELINE_DEQP_TEST_LIST
                             : REPRESENTATIVE_DEQP_TEST_LIST;
             Set<String> dependencies = getDeqpDependencies(device, deqpTestList);
+            if (dependencies.isEmpty()) {
+                throw new TargetSetupError(
+                        "Fail to detect dEQP dependencies from the device.",
+                        TestErrorIdentifier.TEST_ABORTED);
+            }
 
             // Identify and write dependencies to device info report.
             try (HostInfoStore store = new HostInfoStore(jsonFile)) {
@@ -213,10 +218,11 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
 
                 String command =
                         String.format(
-                                "cd %s && simpleperf record -o %s %s --deqp-caselist-file=%s"
-                                    + " --deqp-log-images=disable --deqp-log-shader-sources=disable"
-                                    + " --deqp-log-filename=%s --deqp-surface-type=fbo"
-                                    + " --deqp-surface-width=2048 --deqp-surface-height=2048",
+                                "cd %s && simpleperf record -e cpu-cycles:u -o %s %s"
+                                    + " --deqp-caselist-file=%s --deqp-log-images=disable"
+                                    + " --deqp-log-shader-sources=disable --deqp-log-filename=%s"
+                                    + " --deqp-surface-type=fbo --deqp-surface-width=2048"
+                                    + " --deqp-surface-height=2048",
                                 DEVICE_DEQP_DIR, perfFile, binaryFile, testFile, logFile);
                 device.executeShellCommand(command);
 
