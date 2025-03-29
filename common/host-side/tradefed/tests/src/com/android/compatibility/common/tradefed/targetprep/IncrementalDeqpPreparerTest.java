@@ -18,6 +18,7 @@ package com.android.compatibility.common.tradefed.targetprep;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.endsWith;
 import static org.mockito.Mockito.mock;
@@ -144,6 +145,40 @@ public class IncrementalDeqpPreparerTest {
                     mMockBuildInfo
                             .getBuildAttributes()
                             .containsKey(IncrementalDeqpPreparer.INCREMENTAL_DEQP_ATTRIBUTE_NAME));
+        } finally {
+            FileUtil.recursiveDelete(resultDir);
+        }
+    }
+
+    @Test
+    public void testRunIncrementalDeqp_emptyDependencies() throws Exception {
+        File resultDir = FileUtil.createTempDir("result");
+        try {
+            IBuildInfo mMockBuildInfo = new BuildInfo();
+            IInvocationContext mMockContext = new InvocationContext();
+            mMockContext.addDeviceBuildInfo("build", mMockBuildInfo);
+            mMockContext.addAllocatedDevice("device", mMockDevice);
+            File deviceInfoDir = new File(resultDir, "device-info-files");
+            deviceInfoDir.mkdir();
+            CompatibilityBuildHelper mMockBuildHelper =
+                    new CompatibilityBuildHelper(mMockBuildInfo) {
+                        @Override
+                        public File getResultDir() {
+                            return resultDir;
+                        }
+                    };
+            File dumpFile = FileUtil.createTempFile("parseDump", "perf-dump.txt");
+            when(mMockDevice.pullFile(endsWith("-perf-dump.txt")))
+                    .thenReturn(dumpFile, null, null, null);
+
+            assertThrows(
+                    TargetSetupError.class,
+                    () ->
+                            mPreparer.runIncrementalDeqp(
+                                    mMockContext,
+                                    mMockDevice,
+                                    mMockBuildHelper,
+                                    IncrementalDeqpPreparer.RunMode.LIGHTWEIGHT_RUN));
         } finally {
             FileUtil.recursiveDelete(resultDir);
         }
