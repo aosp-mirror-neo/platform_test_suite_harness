@@ -34,7 +34,7 @@ public class FeatureUtil {
     public static final String TV_FEATURE = "android.hardware.type.television";
     public static final String WATCH_FEATURE = "android.hardware.type.watch";
     public static final String FEATURE_MICROPHONE = "android.hardware.microphone";
-    public static final String XR_FEATURE = "android.software.xr.immersive";
+    public static final String XR_API_FEATURE = "android.software.xr.api.spatial";
 
     /** Returns true if the device has a given system feature */
     public static boolean hasSystemFeature(ITestDevice device, String feature)
@@ -92,7 +92,7 @@ public class FeatureUtil {
 
     /** Returns true if the device has feature XR_FEATURE */
     public static boolean isXrHeadset(ITestDevice device) throws DeviceNotAvailableException {
-        return hasSystemFeature(device, XR_FEATURE);
+        return hasSystemFeature(device, XR_API_FEATURE);
     }
 
     /** Returns true if the device is a low ram device:
