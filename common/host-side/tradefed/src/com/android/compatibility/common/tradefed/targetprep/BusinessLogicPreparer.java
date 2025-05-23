@@ -72,6 +72,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Pushes business Logic to the host and the test device, for use by test cases in the test suite.
@@ -415,7 +416,12 @@ public class BusinessLogicPreparer extends BaseTargetPreparer
             List<String> dynamicConfigFeatures = DynamicConfigFileReader.getValuesFromConfig(
                     buildInfo, getSuiteNames(), DYNAMIC_CONFIG_FEATURES_KEY);
             Set<String> deviceFeatures = FeatureUtil.getAllFeatures(device);
-            dynamicConfigFeatures.retainAll(deviceFeatures);
+            // Strip version number from feature strings
+            Set<String> featuresWithoutVersion =
+                deviceFeatures.stream()
+                              .map(feature -> feature.split("=")[0])
+                              .collect(Collectors.toSet());
+            dynamicConfigFeatures.retainAll(featuresWithoutVersion);
             return dynamicConfigFeatures;
         } catch (XmlPullParserException | IOException e) {
             CLog.e("Failed to pull business logic features from dynamic config");
