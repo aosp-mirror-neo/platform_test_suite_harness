@@ -14,6 +14,14 @@
      limitations under the License.
 -->
 <configuration description="AOSP tradefed config for Compatibility suites to run all modules">
+    <target_preparer class="com.android.compatibility.common.tradefed.targetprep.DeviceInfoCollector">
+        <option name="apk" value="CtsDeviceInfo.apk"/>
+        <option name="package" value="com.android.compatibility.common.deviceinfo"/>
+        <option name="src-dir" value="/sdcard/device-info-files/"/>
+        <option name="dest-dir" value="device-info-files/"/>
+        <option name="temp-dir" value="temp-device-info-files/"/>
+        <option name="throw-error" value="false"/>
+    </target_preparer>
     <include name="common-compatibility-config" />
     <target_preparer class="com.android.tradefed.targetprep.DeviceSetup" />
     <target_preparer class="com.android.tradefed.targetprep.RunCommandTargetPreparer">
