@@ -14,6 +14,13 @@
      limitations under the License.
 -->
 <configuration description="AOSP tradefed config for Compatibility suites to run all modules">
+    <include name="common-compatibility-config" />
+    <target_preparer class="com.android.tradefed.targetprep.DeviceSetup" />
+    <target_preparer class="com.android.tradefed.targetprep.RunCommandTargetPreparer">
+        <option name="run-command" value="settings put global verifier_verify_adb_installs 0" />
+        <option name="run-command" value="am switch-user 10" />
+    </target_preparer>
+    <option name="post-boot-command" value="am switch-user 10" />
     <target_preparer class="com.android.compatibility.common.tradefed.targetprep.DeviceInfoCollector">
         <option name="apk" value="CtsDeviceInfo.apk"/>
         <option name="package" value="com.android.compatibility.common.deviceinfo"/>
@@ -22,11 +29,4 @@
         <option name="temp-dir" value="temp-device-info-files/"/>
         <option name="throw-error" value="false"/>
     </target_preparer>
-    <include name="common-compatibility-config" />
-    <target_preparer class="com.android.tradefed.targetprep.DeviceSetup" />
-    <target_preparer class="com.android.tradefed.targetprep.RunCommandTargetPreparer">
-        <option name="run-command" value="settings put global verifier_verify_adb_installs 0" />
-        <option name="run-command" value="am switch-user 10" />
-    </target_preparer>
-    <option name="post-boot-command" value="am switch-user 10" />
 </configuration>
