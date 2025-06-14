@@ -30,6 +30,10 @@
     </result_reporter>
     <!-- Compact the protos to save space -->
     <result_reporter class="com.android.compatibility.common.tradefed.result.suite.CompactProtoReporter" />
+    <!-- By default, exclude all tests marked "preview only".  Override with:
+           template:map preview-only-exclusion=empty
+     -->
+    <template-include name="preview-only-exclusion" default="exclude-preview-only.xml" />
     <!-- Create the zip report last always -->
     <result_reporter class="com.android.compatibility.common.tradefed.result.suite.CertificationReportCreator" />
 </configuration>
