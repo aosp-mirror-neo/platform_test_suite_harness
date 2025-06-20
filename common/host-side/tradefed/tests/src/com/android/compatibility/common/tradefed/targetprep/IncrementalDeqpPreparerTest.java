@@ -21,6 +21,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.endsWith;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -32,7 +34,10 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.StreamUtil;
 
 import org.junit.Before;
@@ -45,8 +50,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -55,22 +62,40 @@ import java.util.Set;
 public class IncrementalDeqpPreparerTest {
     private IncrementalDeqpPreparer mPreparer;
     private ITestDevice mMockDevice;
+    private IRunUtil mMockRuntil;
 
     @Before
     public void setUp() throws Exception {
-        mPreparer = new IncrementalDeqpPreparer();
         mMockDevice = mock(ITestDevice.class);
+        mMockRuntil = mock(IRunUtil.class);
+        mPreparer =
+                new IncrementalDeqpPreparer() {
+                    @Override
+                    IRunUtil createRunUtil() {
+                        return mMockRuntil;
+                    }
+                };
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Test
     public void testRunIncrementalDeqp() throws Exception {
+        File testsDir = FileUtil.createTempDir("tests");
+        File llvmStrip = new File(testsDir, "llvm-strip");
+        FileUtil.writeToFile(
+                new ByteArrayInputStream("stub llvm strip".getBytes(StandardCharsets.UTF_8)),
+                llvmStrip);
+
         File resultDir = FileUtil.createTempDir("result");
         InputStream deqpDependencyStream =
                 getClass().getResourceAsStream("/testdata/deqp_dependency_file.so");
         File deqpDependencyFile = FileUtil.createTempFile("deqp_dependency_file", ".so");
+        File strippedFile =
+                new File(
+                        deqpDependencyFile.getParent(), "stripped_" + deqpDependencyFile.getName());
+        FileUtil.writeToFile(deqpDependencyStream, strippedFile);
+
         try {
-            FileUtil.writeToFile(deqpDependencyStream, deqpDependencyFile);
             IBuildInfo mMockBuildInfo = new BuildInfo();
             IInvocationContext mMockContext = new InvocationContext();
             mMockContext.addDeviceBuildInfo("build", mMockBuildInfo);
@@ -83,6 +108,11 @@ public class IncrementalDeqpPreparerTest {
                         public File getResultDir() {
                             return resultDir;
                         }
+
+                        @Override
+                        public File getTestsDir() {
+                            return testsDir;
+                        }
                     };
             InputStream perfDumpStream = getClass().getResourceAsStream("/testdata/perf-dump.txt");
             File dumpFile = FileUtil.createTempFile("parseDump", "perf-dump.txt");
@@ -90,6 +120,8 @@ public class IncrementalDeqpPreparerTest {
             when(mMockDevice.pullFile(endsWith("-perf-dump.txt")))
                     .thenReturn(dumpFile, null, null, null);
             when(mMockDevice.pullFile(endsWith(".so"))).thenReturn(deqpDependencyFile);
+            when(mMockRuntil.runTimedCmd(anyLong(), any(String.class)))
+                    .thenReturn(new CommandResult(CommandStatus.SUCCESS));
 
             File incrementalDeqpReport =
                     new File(deviceInfoDir, IncrementalDeqpPreparer.INCREMENTAL_DEQP_REPORT_NAME);
@@ -106,7 +138,9 @@ public class IncrementalDeqpPreparerTest {
             assertTrue(incrementalDeqpReport.exists());
         } finally {
             FileUtil.recursiveDelete(resultDir);
+            FileUtil.recursiveDelete(testsDir);
             FileUtil.deleteFile(deqpDependencyFile);
+            FileUtil.deleteFile(strippedFile);
         }
     }
 
@@ -193,7 +227,6 @@ public class IncrementalDeqpPreparerTest {
             Set<String> dependency = mPreparer.parseDump(dumpFile);
             Set<String> expect = new HashSet<>();
             expect.add("/system/deqp_dependency_file_a.so");
-            expect.add("/vendor/deqp_dependency_file_b.so");
             assertEquals(dependency, expect);
         } finally {
             FileUtil.deleteFile(dumpFile);
@@ -203,19 +236,44 @@ public class IncrementalDeqpPreparerTest {
     @Test
     public void testGetFileHash()
             throws IOException, DeviceNotAvailableException, TargetSetupError {
-        Set<String> fileSet =
+        File testsDir = FileUtil.createTempDir("tests");
+        File llvmStrip = new File(testsDir, "llvm-strip");
+        FileUtil.writeToFile(
+                new ByteArrayInputStream("stub llvm strip".getBytes(StandardCharsets.UTF_8)),
+                llvmStrip);
+
+        Set<String> deviceFileSet =
                 new HashSet<>(
                         Arrays.asList(
                                 "/system/deqp_dependency_file_a.so",
                                 "/vendor/deqp_dependency_file_b.so",
                                 "/vendor/deqp_dependency_file_c.so"));
-        InputStream deqpDependencyStream =
-                getClass().getResourceAsStream("/testdata/deqp_dependency_file.so");
-        File deqpDependencyFile = FileUtil.createTempFile("deqp_dependency_file", ".so");
+
+        List<File> tempFiles = new ArrayList<File>();
+        for (String deviceFile : deviceFileSet) {
+            File pulledFile = FileUtil.createTempFile("deqp_dependency_file", ".so");
+            tempFiles.add(pulledFile);
+            File strippedFile =
+                    new File(pulledFile.getParent(), "stripped_" + pulledFile.getName());
+            tempFiles.add(strippedFile);
+            InputStream deqpDependencyStream =
+                    getClass().getResourceAsStream("/testdata/deqp_dependency_file.so");
+            FileUtil.writeToFile(deqpDependencyStream, strippedFile);
+            when(mMockDevice.pullFile(deviceFile)).thenReturn(pulledFile);
+        }
+
         try {
-            FileUtil.writeToFile(deqpDependencyStream, deqpDependencyFile);
-            when(mMockDevice.pullFile(endsWith(".so"))).thenReturn(deqpDependencyFile);
-            Map<String, String> fileHashMap = mPreparer.getFileHash(fileSet, mMockDevice);
+            CompatibilityBuildHelper mMockBuildHelper =
+                    new CompatibilityBuildHelper(new BuildInfo()) {
+                        @Override
+                        public File getTestsDir() {
+                            return testsDir;
+                        }
+                    };
+            when(mMockRuntil.runTimedCmd(anyLong(), any(String.class)))
+                    .thenReturn(new CommandResult(CommandStatus.SUCCESS));
+            Map<String, String> fileHashMap =
+                    mPreparer.getFileHash(deviceFileSet, mMockDevice, mMockBuildHelper);
 
             assertEquals(fileHashMap.size(), 3);
             String md5 =
@@ -226,7 +284,10 @@ public class IncrementalDeqpPreparerTest {
             assertEquals(fileHashMap.get("/vendor/deqp_dependency_file_b.so"), md5);
             assertEquals(fileHashMap.get("/vendor/deqp_dependency_file_c.so"), md5);
         } finally {
-            FileUtil.deleteFile(deqpDependencyFile);
+            FileUtil.recursiveDelete(testsDir);
+            for (File tempFile : tempFiles) {
+                FileUtil.deleteFile(tempFile);
+            }
         }
     }
 }

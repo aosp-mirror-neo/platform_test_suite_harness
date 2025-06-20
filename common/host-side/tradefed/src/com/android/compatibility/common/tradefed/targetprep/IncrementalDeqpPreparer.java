@@ -16,6 +16,7 @@
 
 package com.android.compatibility.common.tradefed.targetprep;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.compatibility.common.tradefed.build.CompatibilityBuildHelper;
 import com.android.compatibility.common.util.DeviceInfo;
 import com.android.compatibility.common.util.HostInfoStore;
@@ -31,7 +32,11 @@ import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 
 import java.io.BufferedReader;
@@ -75,6 +80,7 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
         ABORT_IF_ANY_EXCEPTION
     }
 
+    private static final long STRIP_TIMEOUT = 20 * 1000;
     private static final String MODULE_NAME = "CtsDeqpTestCases";
     private static final String DEVICE_DEQP_DIR = "/data/local/tmp";
     private static final List<String> BASELINE_DEQP_TEST_LIST =
@@ -96,6 +102,7 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
     private static final String DEPENDENCY_DETAILS_ATTRIBUTE = "deps_details";
     private static final String DEPENDENCY_NAME_ATTRIBUTE = "dep_name";
     private static final String DEPENDENCY_FILE_HASH_ATTRIBUTE = "file_hash";
+    private static final String LLVM_STRIP_FILE_NAME = "llvm-strip";
 
     private static final Pattern EXCLUDE_DEQP_PATTERN =
             Pattern.compile("(^/data/|^/apex/|^\\[vdso" + "\\]|^/dmabuf|^/kgsl-3d0|^/mali csf)");
@@ -171,7 +178,8 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
                 store.startGroup(); // Module
                 store.addResult(MODULE_NAME_ATTRIBUTE, MODULE_NAME);
                 store.startArray(DEPENDENCY_DETAILS_ATTRIBUTE);
-                Map<String, String> currentBuildHashMap = getFileHash(dependencies, device);
+                Map<String, String> currentBuildHashMap =
+                        getFileHash(dependencies, device, buildHelper);
                 for (String dependency : dependencies) {
                     store.startGroup();
                     store.addResult(DEPENDENCY_NAME_ATTRIBUTE, dependency);
@@ -245,20 +253,65 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
     }
 
     /** Gets the hash value of the specified file's content from the device. */
-    protected Map<String, String> getFileHash(Set<String> fileNames, ITestDevice device)
-            throws DeviceNotAvailableException, TargetSetupError {
+    protected Map<String, String> getFileHash(
+            Set<String> fileNames, ITestDevice device, CompatibilityBuildHelper buildHelper)
+            throws DeviceNotAvailableException, TargetSetupError, FileNotFoundException {
+        File llvm_strip_file = new File(buildHelper.getTestsDir(), LLVM_STRIP_FILE_NAME);
+        if (!llvm_strip_file.exists()) {
+            // Finding file in sub directory if no matching file in the first layer of testdir.
+            llvm_strip_file = FileUtil.findFile(buildHelper.getTestsDir(), LLVM_STRIP_FILE_NAME);
+            if (llvm_strip_file == null || !llvm_strip_file.isFile()) {
+                throw new FileNotFoundException(
+                        "Cannot find llvm strip binary: " + LLVM_STRIP_FILE_NAME);
+            }
+        }
+
+        IRunUtil runUtil = createRunUtil();
         Map<String, String> fileHashes = new HashMap<>();
         for (String file : fileNames) {
-            File localFile = device.pullFile(file);
-            if (localFile == null) {
+            File pulledFile = device.pullFile(file);
+            if (pulledFile == null) {
                 throw new TargetSetupError(
                         String.format("Fail to load file: %s from the device.", file),
                         TestErrorIdentifier.TEST_ABORTED);
             }
-            String md5 = FileUtil.calculateMd5(localFile);
-            fileHashes.put(file, md5);
+            String stripped_file_path =
+                    String.format(
+                            "%s%sstripped_%s",
+                            pulledFile.getParent(), File.separator, pulledFile.getName());
+            CommandResult result =
+                    runUtil.runTimedCmd(
+                            STRIP_TIMEOUT,
+                            llvm_strip_file.getAbsolutePath(),
+                            "--strip-all",
+                            "--keep-section=.ARM.attributes",
+                            "--remove-section=.note.gnu.build-id",
+                            pulledFile.getAbsolutePath(),
+                            "-o",
+                            stripped_file_path);
+            FileUtil.deleteFile(pulledFile);
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                throw new TargetSetupError(
+                        String.format("Fail to strip build id for file: %s.", file),
+                        TestErrorIdentifier.TEST_ABORTED);
+            }
+            File stripped_file = new File(stripped_file_path);
+            if (stripped_file.exists()) {
+                String md5 = FileUtil.calculateMd5(stripped_file);
+                fileHashes.put(file, md5);
+                FileUtil.deleteFile(stripped_file);
+            } else {
+                throw new TargetSetupError(
+                        String.format("Fail to find the stripped file: %s.", stripped_file_path),
+                        TestErrorIdentifier.TEST_ABORTED);
+            }
         }
         return fileHashes;
+    }
+
+    @VisibleForTesting
+    IRunUtil createRunUtil() {
+        return new RunUtil();
     }
 
     /** Parses the dump file and gets list of dependencies. */
