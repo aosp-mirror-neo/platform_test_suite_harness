@@ -44,7 +44,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -180,7 +182,10 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
                 store.startArray(DEPENDENCY_DETAILS_ATTRIBUTE);
                 Map<String, String> currentBuildHashMap =
                         getFileHash(dependencies, device, buildHelper);
-                for (String dependency : dependencies) {
+                // Keeps dEQP dependencies in the device info report sorted.
+                ArrayList<String> sortedDependencies = new ArrayList<String>(dependencies);
+                Collections.sort(sortedDependencies);
+                for (String dependency : sortedDependencies) {
                     store.startGroup();
                     store.addResult(DEPENDENCY_NAME_ATTRIBUTE, dependency);
                     store.addResult(
