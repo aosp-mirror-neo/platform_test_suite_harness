@@ -389,8 +389,14 @@ public class CompatibilityBuildHelper {
         // if old logic fails too, do not report search artifact failure
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, -1);
-        throw new FileNotFoundException(String.format(
-                "Compatibility test file %s does not exist", filename));
+        String errorMessage = String.format("Compatibility test file %s does not exist", filename);
+        if (mBuildInfo.getBuildId().startsWith("P")) {
+            errorMessage =
+                    String.format(
+                            "%s. Possible cause and triaging at http://go/bywn-triaging",
+                            errorMessage);
+        }
+        throw new FileNotFoundException(errorMessage);
     }
 
     /**
