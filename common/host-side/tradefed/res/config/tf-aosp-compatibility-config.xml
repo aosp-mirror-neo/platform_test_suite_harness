@@ -21,12 +21,4 @@
         <option name="run-command" value="am switch-user 10" />
     </target_preparer>
     <option name="post-boot-command" value="am switch-user 10" />
-    <target_preparer class="com.android.compatibility.common.tradefed.targetprep.DeviceInfoCollector">
-        <option name="apk" value="CtsDeviceInfo.apk"/>
-        <option name="package" value="com.android.compatibility.common.deviceinfo"/>
-        <option name="src-dir" value="/sdcard/device-info-files/"/>
-        <option name="dest-dir" value="device-info-files/"/>
-        <option name="temp-dir" value="temp-device-info-files/"/>
-        <option name="throw-error" value="false"/>
-    </target_preparer>
 </configuration>
