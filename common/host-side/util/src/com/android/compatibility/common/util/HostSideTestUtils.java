@@ -17,10 +17,14 @@ package com.android.compatibility.common.util;
 
 import static org.junit.Assert.fail;
 
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.RunUtil;
 
 /** Utility class for host-side tests. */
-public class HostSideTestUtils {
+public final class HostSideTestUtils {
+
+    private static final boolean DEBUG = false;
+
     @FunctionalInterface
     public interface BooleanSupplierWithThrow<E extends Throwable> {
         boolean getAsBoolean() throws E;
@@ -29,14 +33,34 @@ public class HostSideTestUtils {
     /** Wait until {@code predicate} is satisfied, or fail, with a given timeout. */
     public static <E extends Throwable> void waitUntil(
             String message, long timeoutSeconds, BooleanSupplierWithThrow<E> predicate) throws E {
+        waitUntil(() -> message, timeoutSeconds, predicate);
+    }
+
+    /** Wait until {@code predicate} is satisfied, or fail, with a given timeout. */
+    public static <E extends Throwable> void waitUntil(
+            ThrowingSupplier<String> message,
+            long timeoutSeconds,
+            BooleanSupplierWithThrow<E> predicate)
+            throws E {
         int sleep = 125;
         final long timeout = System.currentTimeMillis() + timeoutSeconds * 1000;
         while (System.currentTimeMillis() < timeout) {
             if (predicate.getAsBoolean()) {
                 return;
             }
+            if (DEBUG) {
+                CLog.d("Sleeping %dms. Reason: %s", sleep, getMessage(message));
+            }
             RunUtil.getDefault().sleep(sleep);
         }
-        fail(message);
+        fail(getMessage(message));
+    }
+
+    private static String getMessage(ThrowingSupplier<String> supplier) {
+        try {
+            return supplier.get();
+        } catch (Exception e) {
+            return "(Failed to get supplied message: " + e + ")";
+        }
     }
 }
