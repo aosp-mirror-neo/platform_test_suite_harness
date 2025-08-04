@@ -120,6 +120,9 @@ public final class CompatibilityTestSuite extends BaseTestSuite {
                 // Set include/exclude filter is additive
                 setIncludeFilter(subPlan.getIncludeFilters());
                 setExcludeFilter(subPlan.getExcludeFilters());
+                // In subplan mode which are also used for local retry, avoid relogging the
+                // module configuration
+                setInLocalRetry(true);
             } catch (ParseException e) {
                 throw new RuntimeException(
                         String.format("Unable to find or parse subplan %s", mSubPlan), e);
