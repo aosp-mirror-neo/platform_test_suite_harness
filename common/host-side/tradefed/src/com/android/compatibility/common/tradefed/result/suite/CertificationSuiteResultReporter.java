@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -140,6 +141,9 @@ public class CertificationSuiteResultReporter extends XmlFormattedGeneratorRepor
 
     /** LogFileSaver to copy the file to the CTS results folder */
     private LogFileSaver mTestLogSaver;
+
+    private File mLogDirWithModule = null;
+    private LogFileSaver mBaseTestLogSaver;
 
     private Map<LogFile, InputStreamSource> mPreInvocationLogs = new HashMap<>();
     /** Invocation level Log saver to receive when files are logged */
@@ -310,6 +314,7 @@ public class CertificationSuiteResultReporter extends XmlFormattedGeneratorRepor
         // be null at that point.
         if (mTestLogSaver == null) {
             mTestLogSaver = new LogFileSaver(mLogDir);
+            mBaseTestLogSaver = mTestLogSaver;
             // Log all the early logs from before init.
             for (LogFile earlyLog : mPreInvocationLogs.keySet()) {
                 try (InputStreamSource source = mPreInvocationLogs.get(earlyLog)) {
@@ -511,5 +516,66 @@ public class CertificationSuiteResultReporter extends XmlFormattedGeneratorRepor
             }
         }
         return null;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void testModuleStarted(IInvocationContext moduleContext) {
+        super.testModuleStarted(moduleContext);
+        String moduleName = moduleContext.getConfigurationDescriptor().getModuleName();
+        if (moduleName == null) {
+            return;
+        }
+        try {
+            mLogDirWithModule = createLogDirWithModule(mTestLogSaver.getFileDir(), moduleName);
+            mTestLogSaver = new LogFileSaver(mLogDirWithModule);
+        } catch (IOException e) {
+            CLog.w(String.format("Failed to create log dir with module %s.", moduleName));
+            return;
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void testModuleEnded() {
+        super.testModuleEnded();
+        if (mLogDirWithModule == null) {
+            return;
+        }
+        mLogDirWithModule = null;
+        mTestLogSaver = mBaseTestLogSaver;
+    }
+
+    /**
+     * A helper method to get or create a build directory based on the build info of the invocation.
+     */
+    private File createLogDirWithModule(File logDir, String moduleName) throws IOException {
+        List<String> pathSegments = new ArrayList<String>();
+        pathSegments.add(moduleName);
+        File dirWithModule = FileUtil.getFileForPath(logDir, pathSegments.toArray(new String[] {}));
+        // if buildReportDir already exists and is a directory - use it.
+        if (dirWithModule.exists()) {
+            if (dirWithModule.isDirectory()) {
+                return dirWithModule;
+            } else {
+                final String msg =
+                        String.format(
+                                "Cannot create dir %s. " + "File already exists.",
+                                dirWithModule.getAbsolutePath());
+                CLog.w(msg);
+                throw new IOException(msg);
+            }
+        } else {
+            if (FileUtil.mkdirsRWX(dirWithModule)) {
+                return dirWithModule;
+            } else {
+                final String msg =
+                        String.format(
+                                "Cannot create output dir %s. " + "Failed to create directory.",
+                                dirWithModule.getAbsolutePath());
+                CLog.w(msg);
+                throw new IOException(msg);
+            }
+        }
     }
 }
