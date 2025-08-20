@@ -21,6 +21,10 @@ java_library_host {
     defaults: ["cts_error_prone_rules"],
 
     srcs: ["src/**/*.java"],
+    exclude_srcs: [
+        // Use "trace-analysis-host-util" if you want this functionality
+        "src/com/android/compatibility/common/util/TraceAndAnalyze.java",
+    ],
 
     // b/267831518: Pin tradefed and dependencies to Java 11.
     java_version: "11",
@@ -33,4 +37,30 @@ java_library_host {
     libs: [
         "tradefed",
     ],
+}
+
+// This is necessary to support "trace-analysis-host-util".
+// It should not be used directly outside of that.
+filegroup {
+    name: "trace-analysis-source-file",
+    srcs: ["src/com/android/compatibility/common/util/TraceAndAnalyze.java"],
+}
+
+// This needs host_common_data, which the java_library_host rule does not
+// support, nor have an equivalent for supporting.  So we encapsulate this logic
+// in a "default" instead of a library, so tests don't need to remember to also
+// add the host_common_data.  Add this to the "defaults" for your test to use.
+java_defaults {
+    name: "trace-analysis-host-util",
+    // This has the effect of adding these rules for the test's code,
+    // in addition to the trace analysis source.  That's not a bad thing.
+    defaults: ["cts_error_prone_rules"],
+    srcs: [":trace-analysis-source-file"],
+
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+
+    libs: ["compatibility-host-util"],
+
+    host_common_data: [":trace_processor_shell_prebuilt"],
 }
