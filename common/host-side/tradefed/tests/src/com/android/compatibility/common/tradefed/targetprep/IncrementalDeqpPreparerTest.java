@@ -52,6 +52,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -288,6 +289,71 @@ public class IncrementalDeqpPreparerTest {
             for (File tempFile : tempFiles) {
                 FileUtil.deleteFile(tempFile);
             }
+        }
+    }
+
+    /**
+     * Tests that if stripping the build id from a file fails, the hash of the original file is
+     * used.
+     */
+    @Test
+    public void testGetFileHash_stripFails_usesOriginalFileHash()
+            throws IOException, DeviceNotAvailableException, TargetSetupError {
+        File testsDir = FileUtil.createTempDir("tests");
+        File llvmStrip = new File(testsDir, "llvm-strip");
+        llvmStrip.createNewFile(); // The file just needs to exist for the path.
+
+        List<File> pulledFiles = new ArrayList<>();
+        try {
+            // Setup: Create a dummy file to be "pulled" from the device.
+            String fileContent = "This is the original file content that cannot be stripped.";
+            String devicePath1 = "/system/lib/unstrippable1.so";
+            String devicePath2 = "/vendor/lib/unstrippable2.so";
+            String devicePath3 = "/other/lib/unstrippable3.so";
+            Set<String> deviceFileSet =
+                    new HashSet<>(Arrays.asList(devicePath1, devicePath2, devicePath3));
+            Map<String, String> expectedMd5Map = new HashMap<>();
+
+            for (String devicePath : deviceFileSet) {
+                File pulledFile = FileUtil.createTempFile("unstrippable_dependency", ".so");
+                FileUtil.writeToFile(fileContent, pulledFile);
+                pulledFiles.add(pulledFile);
+                expectedMd5Map.put(devicePath, FileUtil.calculateMd5(pulledFile));
+                // Mock the device to return our temp file.
+                when(mMockDevice.pullFile(devicePath)).thenReturn(pulledFile);
+            }
+
+            // Mock the build helper.
+            CompatibilityBuildHelper buildHelper =
+                    new CompatibilityBuildHelper(new BuildInfo()) {
+                        @Override
+                        public File getTestsDir() {
+                            return testsDir;
+                        }
+                    };
+
+            // Mock the runUtil to return a FAILED status, simulating llvm-strip failure.
+            CommandResult failedResult = new CommandResult(CommandStatus.FAILED);
+            failedResult.setStderr("llvm-strip failed for some reason");
+            when(mMockRuntil.runTimedCmd(anyLong(), any())).thenReturn(failedResult);
+
+            // Execute the method under test.
+            Map<String, String> fileHashMap =
+                    mPreparer.getFileHash(deviceFileSet, mMockDevice, buildHelper);
+
+            // Assert: The hash of the original, unstripped file should be used.
+            assertEquals(3, fileHashMap.size());
+            for (String devicePath : deviceFileSet) {
+                assertTrue(fileHashMap.containsKey(devicePath));
+                assertEquals(expectedMd5Map.get(devicePath), fileHashMap.get(devicePath));
+            }
+            // The pulled files should be cleaned up by the preparer.
+            for (File pulledFile : pulledFiles) {
+                assertFalse(pulledFile.exists());
+            }
+        } finally {
+            FileUtil.recursiveDelete(testsDir);
+            pulledFiles.forEach(FileUtil::deleteFile); // Cleanup in case of test failure.
         }
     }
 }
