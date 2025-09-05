@@ -44,8 +44,10 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -54,6 +56,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * Extension of {@link XmlFormattedGeneratorReporter} and {@link SuiteResultReporter} to handle
@@ -542,14 +545,30 @@ public class CertificationSuiteResultReporter extends XmlFormattedGeneratorRepor
         if (mLogDirWithModule == null) {
             return;
         }
+        // Deletes the module level log directory if it contains no files.
+        if (!containsFiles(mLogDirWithModule)) {
+            FileUtil.recursiveDelete(mLogDirWithModule);
+        }
         mLogDirWithModule = null;
         mTestLogSaver = mBaseTestLogSaver;
+    }
+
+    /** Recursively checks if any non-directory file exists in the given directory. */
+    private static boolean containsFiles(File rootDir) {
+        long fileCount = 0;
+        try (Stream<Path> stream =
+                Files.walk(Paths.get(rootDir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
+            fileCount = stream.filter(p -> p.toFile().isFile()).count();
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+        return fileCount > 0;
     }
 
     /**
      * A helper method to get or create a build directory based on the build info of the invocation.
      */
-    private File createLogDirWithModule(File logDir, String moduleName) throws IOException {
+    private static File createLogDirWithModule(File logDir, String moduleName) throws IOException {
         List<String> pathSegments = new ArrayList<String>();
         pathSegments.add(moduleName);
         File dirWithModule = FileUtil.getFileForPath(logDir, pathSegments.toArray(new String[] {}));
