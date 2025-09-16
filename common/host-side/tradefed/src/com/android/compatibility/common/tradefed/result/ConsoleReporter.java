@@ -25,6 +25,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.IShardableListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
@@ -123,6 +124,12 @@ public class ConsoleReporter implements IShardableListener {
      */
     @Override
     public void testAssumptionFailure(TestDescription test, String trace) {
+        logProgress("%s assumption failure", test);
+        mTestSkipped = true;
+    }
+
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
         logProgress("%s skip", test);
         mTestSkipped = true;
     }
@@ -222,12 +229,12 @@ public class ConsoleReporter implements IShardableListener {
         return String.format("%d/%d", mCurrentTestNum, mTotalTestsInModule);
     }
 
-    String getDeviceSerial() {
-        return mDeviceSerial;
-    }
-
     boolean getTestFailed() {
         return mTestFailed;
+    }
+
+    boolean getTestSkipped() {
+        return mTestSkipped;
     }
 
     String getModuleId() {

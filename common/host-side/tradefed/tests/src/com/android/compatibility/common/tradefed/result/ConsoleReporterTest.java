@@ -24,6 +24,7 @@ import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.AbiUtils;
 
 import org.junit.After;
@@ -70,7 +71,7 @@ public class ConsoleReporterTest {
     @Test
     public void testResultReporting_singleModule() throws Exception {
         mReporter.invocationStarted(mContext);
-        mReporter.testRunStarted(ID, 4);
+        mReporter.testRunStarted(ID, 6);
         runTests();
 
         mReporter.testRunEnded(10, new HashMap<String, String>());
@@ -79,21 +80,21 @@ public class ConsoleReporterTest {
         assertEquals(ID, mReporter.getModuleId());
         assertEquals(2, mReporter.getFailedTests());
         assertEquals(1, mReporter.getPassedTests());
-        assertEquals(4, mReporter.getCurrentTestNum());
-        assertEquals(4, mReporter.getTotalTestsInModule());
+        assertEquals(6, mReporter.getCurrentTestNum());
+        assertEquals(6, mReporter.getTotalTestsInModule());
     }
 
     @Test
     public void testResultReporting_multipleModules() throws Exception {
         mReporter.invocationStarted(mContext);
-        mReporter.testRunStarted(ID, 4);
+        mReporter.testRunStarted(ID, 6);
         runTests();
 
         assertEquals(ID, mReporter.getModuleId());
         assertEquals(2, mReporter.getFailedTests());
         assertEquals(1, mReporter.getPassedTests());
-        assertEquals(4, mReporter.getCurrentTestNum());
-        assertEquals(4, mReporter.getTotalTestsInModule());
+        assertEquals(6, mReporter.getCurrentTestNum());
+        assertEquals(6, mReporter.getTotalTestsInModule());
 
         // Should reset counters
         mReporter.testRunStarted(ID2, 4);
@@ -104,29 +105,52 @@ public class ConsoleReporterTest {
         assertEquals(4, mReporter.getTotalTestsInModule());
     }
 
-    /** Run 4 test, but one is ignored */
+    /** Run 6 tests, but one is ignored, one is an assumption failure, one is skipped. */
     private void runTests() {
         TestDescription test1 = new TestDescription(CLASS, METHOD_1);
         mReporter.testStarted(test1);
         mReporter.testEnded(test1, new HashMap<String, Metric>());
         assertFalse(mReporter.getTestFailed());
+        assertFalse(mReporter.getTestSkipped());
 
         TestDescription test2 = new TestDescription(CLASS, METHOD_2);
         mReporter.testStarted(test2);
         assertFalse(mReporter.getTestFailed());
+        assertFalse(mReporter.getTestSkipped());
         mReporter.testFailed(test2, STACK_TRACE);
         assertTrue(mReporter.getTestFailed());
+        assertFalse(mReporter.getTestSkipped());
 
         TestDescription test3 = new TestDescription(CLASS, METHOD_3);
         mReporter.testStarted(test3);
         assertFalse(mReporter.getTestFailed());
+        assertFalse(mReporter.getTestSkipped());
         mReporter.testFailed(test3, STACK_TRACE);
         assertTrue(mReporter.getTestFailed());
+        assertFalse(mReporter.getTestSkipped());
 
         TestDescription test4 = new TestDescription(CLASS, METHOD_3);
         mReporter.testStarted(test4);
         assertFalse(mReporter.getTestFailed());
+        assertFalse(mReporter.getTestSkipped());
         mReporter.testIgnored(test4);
         assertFalse(mReporter.getTestFailed());
+        assertTrue(mReporter.getTestSkipped());
+
+        TestDescription test5 = new TestDescription(CLASS, METHOD_3);
+        mReporter.testStarted(test5);
+        assertFalse(mReporter.getTestFailed());
+        assertFalse(mReporter.getTestSkipped());
+        mReporter.testAssumptionFailure(test5, STACK_TRACE);
+        assertFalse(mReporter.getTestFailed());
+        assertTrue(mReporter.getTestSkipped());
+
+        TestDescription test6 = new TestDescription(CLASS, METHOD_3);
+        mReporter.testStarted(test6);
+        assertFalse(mReporter.getTestFailed());
+        assertFalse(mReporter.getTestSkipped());
+        mReporter.testSkipped(test6, new SkipReason("skip reason message", "skip trigger"));
+        assertFalse(mReporter.getTestFailed());
+        assertTrue(mReporter.getTestSkipped());
     }
 }
