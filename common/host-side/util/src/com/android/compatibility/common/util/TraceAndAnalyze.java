@@ -399,68 +399,69 @@ public class TraceAndAnalyze {
      * the wide variety of dimensions and types and organizations of this data and metadata that is
      * supported.
      *
-     * <p>However, most tests use a relatively simple setup, and just have values (as Doubles)
+     * <p>However, some tests use a relatively simple setup, and just have values (as Doubles)
      * associated with a String id. This method is designed to handle this common case.
      *
-     * <p>This method assumes that each bundle only has a single id/value pairing. Specifically,
-     * regardless of what extra information might be there, for each each bundle, this logic will
-     * only:
+     * <p>This method assumes that each bundle has a single row of values. It assumes there are the
+     * same number of specs as there are values in the row, and they correspond to each other.
      *
-     * <ul>
-     *   <li>Use the id of the first spec.
-     *   <li>Use the first value of the first row, and treat it as a Double.
-     * </ul>
+     * <p>Note this method does not enforce that the TraceSummary is in this format. It will logcat
+     * some instances where this assumption is broken, but otherwise will try to parse as much info
+     * as it can.
      *
      * @param summary A TraceSummary to parse
      * @return A Map pairing together ids (String) with their value (Double).
      */
     public static Map<String, Double> parseSimpleIdValuePairs(TraceSummary traceSummary) {
-        Map<String, Double> values = new HashMap<>();
+        Map<String, Double> idToValue = new HashMap<>();
         if (traceSummary == null) {
-            return values;
+            return idToValue;
         }
         for (TraceMetricV2Bundle bundle : traceSummary.getMetricBundlesList()) {
-            String id = null;
             int specCount = bundle.getSpecsCount();
             int rowCount = bundle.getRowCount();
-            Double value = null;
-            int valueCount = 0;
 
-            if (specCount <= 0) {
-                continue;
-            }
-            id = bundle.getSpecs(0).getId();
-
-            if (id == null) {
-                CLog.w("parseSimpleIdValuePairs: Got null id for bundle spec");
-                continue;
-            }
-
-            if (rowCount > 0) {
-                TraceMetricV2Bundle.Row row = bundle.getRow(0);
-                valueCount = row.getValuesCount();
-                if (valueCount > 0) {
-                    value = row.getValues(0).getDoubleValue();
-                }
-            }
-            values.put(id, value);
-
-            if ((specCount > 1) || (rowCount > 1) || (valueCount > 1)) {
-                // We don't know the callers intentions, so we'll log, but not
-                // fail, that we're ignoring data here.
-                CLog.i(
-                        "parseSimpleIdValuePairs: For id("
-                                + id
-                                + "), ignoring extra data: specCount("
+            if ((specCount <= 0) || (rowCount <= 0)) {
+                CLog.w(
+                        "Skipping bundle with specCount("
                                 + specCount
-                                + "), rowCount("
+                                + ") and rowCount("
                                 + rowCount
-                                + "), valueCount("
-                                + valueCount
                                 + ")");
+                continue;
+            }
+
+            if (rowCount > 1) {
+                CLog.w("Only parsing first row in bundle with rowCount " + rowCount);
+            }
+
+            List<TraceMetricV2Bundle.Row.Value> values = bundle.getRow(0).getValuesList();
+            int valueCount = values.size();
+
+            int pairsCount = Math.min(specCount, valueCount);
+
+            if (specCount != valueCount) {
+                CLog.w(
+                        "Bundle with mismatched specCount("
+                                + specCount
+                                + ") and valueCount("
+                                + valueCount
+                                + "); only parsing first "
+                                + pairsCount);
+            }
+
+            for (int i = 0; i < pairsCount; i++) {
+                String id = bundle.getSpecs(i).getId();
+                if (id == null) {
+                    CLog.w("Got null id in spec at index " + i + "; skipping");
+                    continue;
+                }
+
+                double value = values.get(i).getDoubleValue();
+                idToValue.put(id, value);
             }
         }
-        return values;
+        return idToValue;
     }
 
     private TraceSummary analyzeTrace() throws DeviceNotAvailableException, InternalException {
