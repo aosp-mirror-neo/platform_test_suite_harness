@@ -150,6 +150,8 @@ public class ConsoleReporter implements IShardableListener {
      */
     @Override
     public void testRunFailed(String errorMessage) {
+        // Escape any format specifiers in the error message.
+        errorMessage = errorMessage.replaceAll("%", "%%");
         logMessage(errorMessage);
     }
 
