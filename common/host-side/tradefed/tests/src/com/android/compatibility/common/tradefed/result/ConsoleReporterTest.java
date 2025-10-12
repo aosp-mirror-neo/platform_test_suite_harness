@@ -105,6 +105,17 @@ public class ConsoleReporterTest {
         assertEquals(4, mReporter.getTotalTestsInModule());
     }
 
+    @Test
+    public void testTestRunFailed_withFormatSpecifier() {
+        // This test verifies that testRunFailed does not throw an exception when the error
+        // message contains format specifiers.
+        mReporter.invocationStarted(mContext);
+        // The call should not throw MissingFormatArgumentException
+        mReporter.testRunFailed("This is an error message with a %s format specifier.");
+        mReporter.testRunFailed("This is another error with multiple %s and %d specifiers.");
+        mReporter.testRunFailed("This is an error with just a percent sign %.");
+    }
+
     /** Run 6 tests, but one is ignored, one is an assumption failure, one is skipped. */
     private void runTests() {
         TestDescription test1 = new TestDescription(CLASS, METHOD_1);
