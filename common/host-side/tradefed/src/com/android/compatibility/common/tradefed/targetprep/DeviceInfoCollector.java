@@ -140,7 +140,7 @@ public class DeviceInfoCollector extends ApkInstrumentationPreparer implements I
                         .versionSdk(VERSION_SDK)
                         .versionSecurityPatch(VERSION_SECURITY_PATCH)
                         .versionIncremental(VERSION_INCREMENTAL)
-                        .versionSdkFull(VERSION_SDK_FULL)
+                        .versionSdkFull(device.getApiLevel() >= 36 ? VERSION_SDK_FULL : VERSION_SDK)
                         .build();
 
         // add device properties to the result with a prefix tag for each key
