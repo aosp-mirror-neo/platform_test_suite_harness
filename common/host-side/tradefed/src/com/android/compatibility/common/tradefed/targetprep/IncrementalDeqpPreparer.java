@@ -294,22 +294,26 @@ public class IncrementalDeqpPreparer extends BaseTargetPreparer {
                             pulledFile.getAbsolutePath(),
                             "-o",
                             stripped_file_path);
-            FileUtil.deleteFile(pulledFile);
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                throw new TargetSetupError(
-                        String.format("Fail to strip build id for file: %s.", file),
-                        TestErrorIdentifier.TEST_ABORTED);
-            }
-            File stripped_file = new File(stripped_file_path);
-            if (stripped_file.exists()) {
-                String md5 = FileUtil.calculateMd5(stripped_file);
+                CLog.w(
+                        "Fail to strip build id for file: %s. The original file will be used.",
+                        file);
+                String md5 = FileUtil.calculateMd5(pulledFile);
                 fileHashes.put(file, md5);
-                FileUtil.deleteFile(stripped_file);
             } else {
-                throw new TargetSetupError(
-                        String.format("Fail to find the stripped file: %s.", stripped_file_path),
-                        TestErrorIdentifier.TEST_ABORTED);
+                File stripped_file = new File(stripped_file_path);
+                if (stripped_file.exists()) {
+                    String md5 = FileUtil.calculateMd5(stripped_file);
+                    fileHashes.put(file, md5);
+                    FileUtil.deleteFile(stripped_file);
+                } else {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Fail to find the stripped file: %s.", stripped_file_path),
+                            TestErrorIdentifier.TEST_ABORTED);
+                }
             }
+            FileUtil.deleteFile(pulledFile);
         }
         return fileHashes;
     }
