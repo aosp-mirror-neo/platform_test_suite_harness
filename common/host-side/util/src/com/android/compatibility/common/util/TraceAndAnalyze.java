@@ -451,12 +451,12 @@ public class TraceAndAnalyze {
             }
 
             for (int i = 0; i < pairsCount; i++) {
-                String id = bundle.getSpecs(i).getId();
-                if (id == null) {
-                    CLog.w("Got null id in spec at index " + i + "; skipping");
+                if (!bundle.getSpecs(i).hasId()) {
+                    CLog.w("Got unset id in spec at index " + i + "; skipping");
                     continue;
                 }
 
+                String id = bundle.getSpecs(i).getId();
                 double value = values.get(i).getDoubleValue();
                 idToValue.put(id, value);
             }
