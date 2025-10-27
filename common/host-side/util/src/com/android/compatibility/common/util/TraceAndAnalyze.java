@@ -18,6 +18,8 @@ package com.android.compatibility.common.util;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.INativeDevice;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.FileInputStreamSource;
+import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -78,6 +80,7 @@ public class TraceAndAnalyze {
     private long mTraceProcessorTimeoutMs;
     private INativeDevice mDevice;
     private int mPerfettoPid = -1;
+    private File mRawPerfettoTraceFile = null;
 
     // We support multiple instances of this class existing at once.  We use
     // this number to make sure our filenames on the device are unique.
@@ -303,6 +306,25 @@ public class TraceAndAnalyze {
         mDevice.executeShellV2Command("kill -TERM " + mPerfettoPid);
     }
 
+    /**
+     * Get the raw contents of the perfetto trace.
+     *
+     * <p>After Java shuts down, this class's temporary host copy of the perfetto trace pulled from
+     * the device gets deleted. Some tests may want a copy of the trace's contents, to put in their
+     * artifacts or upload somewhere.
+     *
+     * <p>This method provides a read-only stream of these contents. Note these contents are not
+     * available before the TraceSummary has been made available.
+     *
+     * @return A read-only stream of the raw trace
+     */
+    public InputStreamSource getRawPerfettoTraceContents() {
+        if (mRawPerfettoTraceFile == null) {
+            return null;
+        }
+        return new FileInputStreamSource(mRawPerfettoTraceFile);
+    }
+
     private File getTraceProcessorHostFile() throws InternalException {
         File file = SearchArtifactUtil.searchFile(TRACE_PROCESSOR_FILENAME, false);
         if (file == null || !file.exists()) {
@@ -451,12 +473,12 @@ public class TraceAndAnalyze {
             }
 
             for (int i = 0; i < pairsCount; i++) {
-                String id = bundle.getSpecs(i).getId();
-                if (id == null) {
-                    CLog.w("Got null id in spec at index " + i + "; skipping");
+                if (!bundle.getSpecs(i).hasId()) {
+                    CLog.w("Got unset id in spec at index " + i + "; skipping");
                     continue;
                 }
 
+                String id = bundle.getSpecs(i).getId();
                 double value = values.get(i).getDoubleValue();
                 idToValue.put(id, value);
             }
@@ -467,20 +489,24 @@ public class TraceAndAnalyze {
     private TraceSummary analyzeTrace() throws DeviceNotAvailableException, InternalException {
         // Pull the trace file from the device to a host file for analysis.
         String deviceTracePath = getPerfettoTraceDevicePath();
-        File hostTraceFile = mDevice.pullFile(deviceTracePath);
-        if (hostTraceFile == null) {
+        mRawPerfettoTraceFile = mDevice.pullFile(deviceTracePath);
+        if (mRawPerfettoTraceFile == null) {
             String errMsg = "Unable to pull trace file " + deviceTracePath + " from device";
             // We'll blame perfetto for not creating the trace file.
             throw new InternalException(errMsg, InternalException.DEVICE_COMMAND_FAILURE);
         }
-        hostTraceFile.deleteOnExit(); // We just need this temporarily.
+        // We don't want to keep this file around in the host machine's temp
+        // directory.  Callers can use getRawPerfettoTraceContents() if they're
+        // interested in saving their own copy.
+        mRawPerfettoTraceFile.deleteOnExit();
 
         File traceProcessorBinary = getTraceProcessorHostFile();
         FileUtil.chmodGroupRWX(traceProcessorBinary);
 
         String[] argsArray =
                 getTraceProcessorArgs(
-                        hostTraceFile.getAbsolutePath(), traceProcessorBinary.getAbsolutePath());
+                        mRawPerfettoTraceFile.getAbsolutePath(),
+                        traceProcessorBinary.getAbsolutePath());
 
         IRunUtil runner = RunUtil.getDefault();
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
