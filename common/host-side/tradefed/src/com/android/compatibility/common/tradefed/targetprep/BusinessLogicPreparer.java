@@ -15,6 +15,8 @@
  */
 package com.android.compatibility.common.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.getRunTestsAsUser;
+
 import com.android.compatibility.common.tradefed.build.CompatibilityBuildHelper;
 import com.android.compatibility.common.tradefed.util.DynamicConfigFileReader;
 import com.android.compatibility.common.util.BusinessLogic;
@@ -69,9 +71,10 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.regex.Matcher;
 import java.util.Set;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -159,6 +162,7 @@ public class BusinessLogicPreparer extends BaseTargetPreparer
     private String mHostFilePushed;
     private IAbi mAbi = null;
     private IInvocationContext mModuleContext = null;
+    private int mTestUserId;
 
     /** {@inheritDoc} */
     @Override
@@ -185,6 +189,7 @@ public class BusinessLogicPreparer extends BaseTargetPreparer
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         IBuildInfo buildInfo = testInfo.getBuildInfo();
         ITestDevice device = testInfo.getDevice();
+        mTestUserId = getRunTestsAsUser(testInfo);
         CompatibilityBuildHelper buildHelper = new CompatibilityBuildHelper(buildInfo);
         if (buildHelper.hasBusinessLogicHostFile()) {
             CLog.i("Business logic file already collected, skipping BusinessLogicPreparer.");
@@ -249,8 +254,9 @@ public class BusinessLogicPreparer extends BaseTargetPreparer
             writeToCache(businessLogicString, baseUrl, requestParams, mCleanCache);
         }
         // Push business logic string to host file
+        File hostFile = null;
         try {
-            File hostFile = FileUtil.createTempFile(FILE_LOCATION, FILE_EXT);
+            hostFile = FileUtil.createTempFile(FILE_LOCATION, FILE_EXT);
             FileUtil.writeToFile(businessLogicString, hostFile);
             mHostFilePushed = hostFile.getAbsolutePath();
             // Ensure bitness is set.
@@ -266,7 +272,8 @@ public class BusinessLogicPreparer extends BaseTargetPreparer
         }
         // Push business logic string to device file
         removeDeviceFile(device); // remove any existing business logic file from device
-        if (device.pushString(businessLogicString, BusinessLogic.DEVICE_FILE)) {
+
+        if (device.pushFile(hostFile, BusinessLogic.DEVICE_FILE, mTestUserId)) {
             mDeviceFilePushed = BusinessLogic.DEVICE_FILE;
         } else {
             throw new TargetSetupError(
@@ -603,8 +610,8 @@ public class BusinessLogicPreparer extends BaseTargetPreparer
     }
 
     /** Remove business logic file from the device */
-    private static void removeDeviceFile(ITestDevice device) throws DeviceNotAvailableException {
-        device.deleteFile(BusinessLogic.DEVICE_FILE);
+    private void removeDeviceFile(ITestDevice device) throws DeviceNotAvailableException {
+        device.deleteFile(BusinessLogic.DEVICE_FILE, mTestUserId);
     }
 
     /**
