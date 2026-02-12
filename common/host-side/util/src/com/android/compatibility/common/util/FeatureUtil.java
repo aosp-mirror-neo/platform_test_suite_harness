@@ -27,6 +27,8 @@ import java.util.Set;
  */
 public class FeatureUtil {
 
+    public static final String ARC_DEVICE_MANAGEMENT_FEATURE = "org.chromium.arc.device_management";
+    public static final String ARC_FEATURE = "org.chromium.arc";
     public static final String AUTOMOTIVE_FEATURE = "android.hardware.type.automotive";
     public static final String LEANBACK_FEATURE = "android.software.leanback";
     public static final String LOW_RAM_FEATURE = "android.hardware.ram.low";
@@ -75,6 +77,11 @@ public class FeatureUtil {
         return allFeatures;
     }
 
+    /** Returns true if device has feature ARC_FEATURE or feature ARC_DEVICE_MANAGEMENT_FEATURE. */
+    public static boolean isArc(ITestDevice device) throws DeviceNotAvailableException {
+        return hasAnySystemFeature(device, ARC_FEATURE, ARC_DEVICE_MANAGEMENT_FEATURE);
+    }
+
     /** Returns true if the device has feature TV_FEATURE or feature LEANBACK_FEATURE */
     public static boolean isTV(ITestDevice device) throws DeviceNotAvailableException {
         return hasAnySystemFeature(device, TV_FEATURE, LEANBACK_FEATURE);
@@ -93,6 +100,18 @@ public class FeatureUtil {
     /** Returns true if the device has feature XR_FEATURE */
     public static boolean isXrHeadset(ITestDevice device) throws DeviceNotAvailableException {
         return hasSystemFeature(device, XR_API_FEATURE);
+    }
+
+    /* TODO: Add isVrHeadset() */
+
+    /** Returns true if the device is a phone or tablet. */
+    public static boolean isHandheld(ITestDevice device) throws DeviceNotAvailableException {
+        // TODO: Add !isVrHeadset(device) to the checks.
+        return !isArc(device)
+                && !isAutomotive(device)
+                && !isTV(device)
+                && !isWatch(device)
+                && !isXrHeadset(device);
     }
 
     /** Returns true if the device is a low ram device:
