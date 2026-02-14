@@ -27,11 +27,10 @@ import java.util.Set;
  */
 public class FeatureUtil {
 
-    public static final String ARC_DEVICE_MANAGEMENT_FEATURE = "org.chromium.arc.device_management";
-    public static final String ARC_FEATURE = "org.chromium.arc";
     public static final String AUTOMOTIVE_FEATURE = "android.hardware.type.automotive";
     public static final String LEANBACK_FEATURE = "android.software.leanback";
     public static final String LOW_RAM_FEATURE = "android.hardware.ram.low";
+    public static final String PC_FEATURE = "android.hardware.type.pc";
     public static final String TELEPHONY_FEATURE = "android.hardware.telephony";
     public static final String TV_FEATURE = "android.hardware.type.television";
     public static final String WATCH_FEATURE = "android.hardware.type.watch";
@@ -77,9 +76,9 @@ public class FeatureUtil {
         return allFeatures;
     }
 
-    /** Returns true if device has feature ARC_FEATURE or feature ARC_DEVICE_MANAGEMENT_FEATURE. */
-    public static boolean isArc(ITestDevice device) throws DeviceNotAvailableException {
-        return hasAnySystemFeature(device, ARC_FEATURE, ARC_DEVICE_MANAGEMENT_FEATURE);
+    /** Returns true if device has feature PC_FEATURE */
+    public static boolean isPC(ITestDevice device) throws DeviceNotAvailableException {
+        return hasAnySystemFeature(device, PC_FEATURE);
     }
 
     /** Returns true if the device has feature TV_FEATURE or feature LEANBACK_FEATURE */
@@ -107,8 +106,8 @@ public class FeatureUtil {
     /** Returns true if the device is a phone or tablet. */
     public static boolean isHandheld(ITestDevice device) throws DeviceNotAvailableException {
         // TODO: Add !isVrHeadset(device) to the checks.
-        return !isArc(device)
-                && !isAutomotive(device)
+        return !isAutomotive(device)
+                && !isPC(device)
                 && !isTV(device)
                 && !isWatch(device)
                 && !isXrHeadset(device);
