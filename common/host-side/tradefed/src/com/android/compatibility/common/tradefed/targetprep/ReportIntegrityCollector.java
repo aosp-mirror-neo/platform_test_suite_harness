@@ -16,18 +16,13 @@
 
 package com.android.compatibility.common.tradefed.targetprep;
 
-import com.android.compatibility.common.util.CsrUtil;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.TargetSetupError;
-
-import java.util.Base64;
-import java.util.Map;
 
 /** Collects data from devices to validate report integrity. */
 public class ReportIntegrityCollector implements ITargetPreparer {
@@ -44,18 +39,6 @@ public class ReportIntegrityCollector implements ITargetPreparer {
         // Collect VBMeta data.
         buildInfo.addBuildAttribute(
                 "cts:build_vb_meta_digest", nullToEmpty(device.getProperty(VB_META_DIGEST)));
-
-        // Collect csr values.
-        try {
-            Map<String, byte[]> instanceNameToCsrMap = CsrUtil.getInstanceNameToCsr(device);
-            for (Map.Entry<String, byte[]> instanceNameToCsr : instanceNameToCsrMap.entrySet()) {
-                String instanceName = nullToEmpty(instanceNameToCsr.getKey());
-                String csr = Base64.getEncoder().encodeToString(instanceNameToCsr.getValue());
-                buildInfo.addBuildAttribute("cts:csr_" + instanceName, csr);
-            }
-        } catch (Exception e) {
-            CLog.e("Fail to collect csr values from %s, error: %s", device.getSerialNumber(), e);
-        }
     }
 
     private static String nullToEmpty(String value) {

@@ -30,7 +30,6 @@ java_library_host {
     java_version: "11",
 
     static_libs: [
-        "cbor-java",
         "compatibility-common-util-hostsidelib",
         "json",
     ],
