@@ -18,6 +18,7 @@ package com.android.compatibility.common.tradefed.targetprep;
 
 import com.android.compatibility.common.util.CsrUtil;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
@@ -32,6 +33,9 @@ import java.util.Map;
 /** Collects data from devices to validate report integrity. */
 public class ReportIntegrityCollector implements ITargetPreparer {
     private static final String VB_META_DIGEST = "ro.boot.vbmeta.digest";
+
+    @Option(name = "disable", description = "disables the collector")
+    private boolean mDisable = false;
 
     @Override
     public void setUp(TestInformation testInfo)
@@ -56,6 +60,16 @@ public class ReportIntegrityCollector implements ITargetPreparer {
         } catch (Exception e) {
             CLog.e("Fail to collect csr values from %s, error: %s", device.getSerialNumber(), e);
         }
+    }
+
+    @Override
+    public final boolean isDisabled() {
+        return mDisable;
+    }
+
+    @Override
+    public final void setDisable(boolean isDisabled) {
+        mDisable = isDisabled;
     }
 
     private static String nullToEmpty(String value) {
