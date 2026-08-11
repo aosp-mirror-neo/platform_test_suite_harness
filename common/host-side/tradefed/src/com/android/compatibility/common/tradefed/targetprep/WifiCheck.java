@@ -59,23 +59,19 @@ public class WifiCheck extends PreconditionPreparer {
             return; // skip this precondition check if device doesn't support wifi
         }
 
-        if (mWifiSsid == null) { // no connection to create, check for existing connectivity
-            if (!device.checkConnectivity()) {
-                CLog.e(
-                        "Device has no network connection, no ssid provided, some modules "
-                                + "of CTS require an active network connection");
-                return;
-            }
-        } else { // network provided in options, attempt to create new connection
-            CLog.i("Attempting connection to \"%s\"", mWifiSsid);
-            if (!device.connectToWifiNetwork(mWifiSsid, mWifiPsk)) { // attempt connection
-                CLog.e(
-                        "Unable to connect to network \"%s\", some modules of CTS"
-                                + "require an active network connection",
-                        mWifiSsid);
-                return;
-            }
+        if (mWifiSsid == null) {
+            CLog.i("Wifi check is skipped due to missing ssid");
+            return;
         }
-        CLog.i("Wifi is connected");
+
+        CLog.i("Attempting connection to \"%s\"", mWifiSsid);
+        if (!device.connectToWifiNetwork(mWifiSsid, mWifiPsk)) { // attempt connection
+            CLog.e(
+                    "Unable to connect to network \"%s\", some modules of CTS"
+                            + "require an active network connection",
+                    mWifiSsid);
+        } else {
+            CLog.i("Wifi is connected to \"%s\"", mWifiSsid);
+        }
     }
 }
